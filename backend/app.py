@@ -8,19 +8,35 @@ db = firestore.Client(database=os.environ.get("BASE_DATOS", "(default)"))
 INSTANCIA = uuid.uuid4().hex[:6]
 
 
-@app.before_request
-def manejar_preflight():
-    if request.method == "OPTIONS":
-        return "", 204
-
-
-@app.after_request
-def permitir_navegador(respuesta):
-    origen = os.environ.get("FRONTEND_URL") or request.headers.get("Origin") or "*"
+def aplicar_cors(respuesta):
+    origen = os.environ.get("FRONTEND_URL")
+    if not origen or origen.strip() == "":
+        origen = request.headers.get("Origin") or "*"
     respuesta.headers["Access-Control-Allow-Origin"] = origen
     respuesta.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     respuesta.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     return respuesta
+
+
+@app.before_request
+def manejar_preflight():
+    if request.method == "OPTIONS":
+        respuesta = app.make_default_options_response()
+        return aplicar_cors(respuesta)
+
+
+@app.after_request
+def permitir_navegador(respuesta):
+    return aplicar_cors(respuesta)
+
+
+@app.errorhandler(Exception)
+def manejar_error(e):
+    codigo = getattr(e, "code", 500)
+    respuesta = jsonify(error=str(e))
+    respuesta.status_code = codigo
+    return aplicar_cors(respuesta)
+
 
 
 @app.get("/")
