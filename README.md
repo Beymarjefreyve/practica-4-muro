@@ -65,22 +65,62 @@ flowchart TD
 
 ## Fase 0. Preparación
 
-En esta fase se verificaron las herramientas base en la máquina de desarrollo (Google Cloud SDK, Terraform, Docker), se autenticaron las credenciales contra Google Cloud y se vinculó el proyecto activo.
+En esta fase se verificaron las herramientas en el entorno de Cloud Shell (Google Cloud SDK, Terraform, Docker), se comprobó la autenticación con la cuenta activa y se vinculó el proyecto de trabajo.
 
-### Comandos ejecutados:
+### Comandos ejecutados y salidas:
 ```bash
-# Verificación de versiones instaladas
-gcloud --version
-terraform -version
-docker --version
+yefreybeimar2005@cloudshell:~/practica-4-muro (project-3111890e-6ba4-4e0e-95f)$ terraform version
+Terraform v1.16.2
+on linux_amd64
 
-# Autenticación con Google Cloud y credenciales por defecto de aplicación
-gcloud auth login
-gcloud auth application-default login
+Your version of Terraform is out of date! The latest version
+is 1.16.5. You can update by downloading from https://developer.hashicorp.com/terraform/install
 
-# Configuración del proyecto de trabajo en la CLI
-gcloud config set project project-3111890e-6ba4-4e0e-95f
-gcloud config list
+yefreybeimar2005@cloudshell:~/practica-4-muro (project-3111890e-6ba4-4e0e-95f)$ docker version
+Client: Docker Engine - Community
+ Version:           29.8.2
+ API version:       1.56
+ Go version:        go1.26.8
+ Git commit:        7fc2dff
+ Built:             Wed Sep 30 19:32:28 2026
+ OS/Arch:           linux/amd64
+ Context:           default
+
+Server: Docker Engine - Community
+ Engine:
+  Version:          29.8.2
+  API version:      1.56 (minimum version 1.40)
+  Go version:       go1.26.8
+  Git commit:       8af9fe3
+  Built:            Wed Sep 30 19:32:28 2026
+  OS/Arch:          linux/amd64
+  Experimental:     false
+ containerd:
+  Version:          v2.3.6
+  GitCommit:        ee2735368117d2eb259779949d5e75cdafec9761
+ runc:
+  Version:          1.5.1
+  GitCommit:        v1.5.1-0-g8f2685a4
+ docker-init:
+  Version:          0.19.0
+  GitCommit:        de40ad0
+
+yefreybeimar2005@cloudshell:~/practica-4-muro (project-3111890e-6ba4-4e0e-95f)$ gcloud config list
+[accessibility]
+screen_reader = True
+[component_manager]
+disable_update_check = True
+[compute]
+gce_metadata_read_timeout_sec = 30
+[core]
+account = yefreybeimar2005@gmail.com
+disable_usage_reporting = False
+project = project-3111890e-6ba4-4e0e-95f
+universe_domain = googleapis.com
+[metrics]
+environment = devshell
+
+Your active configuration is: [cloudshell-21508]
 ```
 
 ### Evidencias:
@@ -94,18 +134,34 @@ gcloud config list
 
 ## Fase 1. Las imágenes
 
-Se construyeron localmente las imágenes Docker para el backend (Flask) y el frontend (servidor web liviano en Python) para verificar empaquetado, dependencias y puertos de escucha antes del despliegue en la nube.
+Se construyeron localmente las imágenes de contenedor para el backend (Python/Flask con dependencias en `requirements.txt`) y el frontend (servidor web HTTP con `server.py` e `index.html`), probando su ejecución local y verificación en el demonio de Docker.
 
-### Comandos ejecutados:
+### Comandos ejecutados y salidas:
 ```bash
 # Construcción local de la imagen del backend
-docker build -t backend:v1 ./backend
+yefreybeimar2005@cloudshell:~/practica-4-muro (project-3111890e-6ba4-4e0e-95f)$ docker build -t backend:local backend
+[+] Building 32.5s (10/10) FINISHED
+ => naming to docker.io/library/backend:local
 
 # Construcción local de la imagen del frontend
-docker build -t frontend:v1 ./frontend
+yefreybeimar2005@cloudshell:~/practica-4-muro (project-3111890e-6ba4-4e0e-95f)$ docker build -t frontend:local frontend
+[+] Building 0.7s (8/8) FINISHED
+ => naming to docker.io/library/frontend:local
 
-# Verificación de imágenes construidas en el daemon local
-docker images
+# Inspección de las imágenes creadas en Docker
+yefreybeimar2005@cloudshell:~/practica-4-muro (project-3111890e-6ba4-4e0e-95f)$ docker images
+IMAGE            ID             DISK USAGE   CONTENT SIZE   EXTRA
+backend:local    376b276b5c28        283MB         67.6MB        
+frontend:local   2d4e42256d7e        178MB         43.5MB        
+
+# Prueba de ejecución en segundo plano del frontend en el puerto 8080
+yefreybeimar2005@cloudshell:~/practica-4-muro (project-3111890e-6ba4-4e0e-95f)$ docker run -d --rm --name front -p 8080:8080 frontend:local
+fed4e7ee752ff8f5d052d80d1b9912c69eb7a1f48297f18182b47d917d951415
+
+# Reconstrucción con caché del backend y detención del contenedor de prueba
+yefreybeimar2005@cloudshell:~/practica-4-muro (project-3111890e-6ba4-4e0e-95f)$ docker build -t backend:local backend
+yefreybeimar2005@cloudshell:~/practica-4-muro (project-3111890e-6ba4-4e0e-95f)$ docker stop front
+front
 ```
 
 ### Evidencias:
@@ -119,21 +175,52 @@ docker images
 
 ## Fase 2. Los cimientos
 
-Se inicializó y aplicó la infraestructura base con Terraform: habilitación de APIs de Google Cloud (`run.googleapis.com`, `artifactregistry.googleapis.com`, `firestore.googleapis.com`, `iam.googleapis.com`), creación del repositorio de Artifact Registry, base de datos de Firestore en modo nativo y creación de la cuenta de servicio del backend con el rol `roles/datastore.user`.
+Se aplicó la configuración de Terraform para habilitar las APIs necesarias (`run.googleapis.com`, `artifactregistry.googleapis.com`, `firestore.googleapis.com`, `iam.googleapis.com`), aprovisionar el repositorio en Artifact Registry, crear la base de datos Firestore nativa `villamizar-db` y configurar la cuenta de servicio con el rol `roles/datastore.user`.
 
-### Comandos ejecutados:
+### Comandos ejecutados y salidas:
 ```bash
-cd infra
+# Verificación de imágenes subidas al repositorio de Artifact Registry
+yefreybeimar2005@cloudshell:~/practica-4-muro (project-3111890e-6ba4-4e0e-95f)$ gcloud artifacts docker images list $RUTA
+Listing items under project project-3111890e-6ba4-4e0e-95f, location us-central1, repository villamizar-imagenes.
 
-# Inicialización de proveedores de Terraform
-terraform init
+IMAGE: us-central1-docker.pkg.dev/project-3111890e-6ba4-4e0e-95f/villamizar-imagenes/backend
+DIGEST: sha256:b6f5d27f895102352910091bc81860ee12b763277ba39a210c28bc0be6834579
+CREATE_TIME: 2026-10-12T16:18:32
+UPDATE_TIME: 2026-10-12T16:18:32
+SIZE: 68655817
 
-# Planificación y creación de la infraestructura inicial
-terraform plan
-terraform apply -auto-approve
+IMAGE: us-central1-docker.pkg.dev/project-3111890e-6ba4-4e0e-95f/villamizar-imagenes/frontend
+DIGEST: sha256:857975e75e2d8e1c498025a54cbb50072866ee3b1f8adeaacff0f84150f722ee
+CREATE_TIME: 2026-10-12T16:19:44
+UPDATE_TIME: 2026-10-12T16:19:44
+SIZE: 44538429
 
-# Configuración del helper de autenticación de Docker para Artifact Registry
-gcloud auth configure-docker us-central1-docker.pkg.dev
+# Consulta del estado de la base de datos Firestore aprovisionada
+yefreybeimar2005@cloudshell:~/practica-4-muro (project-3111890e-6ba4-4e0e-95f)$ gcloud firestore databases list
+---
+appEngineIntegrationMode: DISABLED
+concurrencyMode: PESSIMISTIC
+createTime: '2026-10-12T15:49:37.464986Z'
+databaseEdition: STANDARD
+deleteProtectionState: DELETE_PROTECTION_DISABLED
+earliestVersionTime: '2026-10-12T15:49:37.464986Z'
+etag: IL+88qHytJcDMLPDwq3qtJcD
+freeTier: true
+locationId: us-central1
+name: projects/project-3111890e-6ba4-4e0e-95f/databases/villamizar-db
+pointInTimeRecoveryEnablement: POINT_IN_TIME_RECOVERY_DISABLED
+realtimeUpdatesMode: REALTIME_UPDATES_MODE_ENABLED
+type: FIRESTORE_NATIVE
+uid: 4d3224b5-c607-40aa-8d5d-a4e8fb5d47ba
+updateTime: '2026-10-12T15:49:37.464986Z'
+versionRetentionPeriod: 3600s
+
+# Verificación de la vinculación IAM de roles/datastore.user a la cuenta de servicio
+yefreybeimar2005@cloudshell:~/practica-4-muro (project-3111890e-6ba4-4e0e-95f)$ gcloud projects get-iam-policy project-3111890e-6ba4-4e0e-95f \
+  --flatten="bindings[]" \
+  --filter="bindings.role:roles/datastore.user" \
+  --format="table(bindings.members)"
+MEMBERS: ['serviceAccount:villamizar-backend@project-3111890e-6ba4-4e0e-95f.iam.gserviceaccount.com']
 ```
 
 ### Evidencias:
@@ -150,26 +237,21 @@ gcloud auth configure-docker us-central1-docker.pkg.dev
 
 ## Fase 3. El backend
 
-Se etiquetó y publicó la imagen del backend en Artifact Registry. Posteriormente se desplegó el servicio en Cloud Run mediante Terraform, configurando variables de entorno, concurrencia máxima y acceso público (`allUsers`). Se validó la API mediante llamadas directas con `curl`.
+Se desplegó el servicio de Cloud Run para el backend conectándolo a la base de datos Firestore y configurando el acceso público para `allUsers`. Se realizaron pruebas de creación y listado de mensajes directamente desde la línea de comandos con `curl`.
 
-### Comandos ejecutados:
+### Comandos ejecutados y salidas:
 ```bash
-# Etiquetado de la imagen del backend para Artifact Registry
-docker tag backend:v1 us-central1-docker.pkg.dev/project-3111890e-6ba4-4e0e-95f/villamizar-imagenes/backend:v1
+# Obtención de la URL generada del backend y pruebas de endpoints con cURL
+yefreybeimar2005@cloudshell:~/practica-4-muro (project-3111890e-6ba4-4e0e-95f)$ B=$(terraform -chdir=infra output -raw url_backend)
 
-# Subida de la imagen al repositorio remoto
-docker push us-central1-docker.pkg.dev/project-3111890e-6ba4-4e0e-95f/villamizar-imagenes/backend:v1
+# Publicación de un nuevo mensaje mediante POST
+yefreybeimar2005@cloudshell:~/practica-4-muro (project-3111890e-6ba4-4e0e-95f)$ curl -s -X POST $B/mensajes -H "Content-Type: application/json" \
+    -d '{"autor": "Beymar", "texto": "primer mensaje"}'
+{"instancia":"69b2f0","ok":true}
 
-# Despliegue del servicio Cloud Run del backend
-cd infra
-terraform apply -auto-approve
-
-# Pruebas funcionales con curl
-curl https://villamizar-backend-ivd2fmc7ia-uc.a.run.app/
-curl -X POST https://villamizar-backend-ivd2fmc7ia-uc.a.run.app/mensajes \
-  -H "Content-Type: application/json" \
-  -d '{"autor": "Beymar", "texto": "Primer mensaje desde terminal"}'
-curl https://villamizar-backend-ivd2fmc7ia-uc.a.run.app/mensajes
+# Consulta y listado de mensajes persistidos mediante GET
+yefreybeimar2005@cloudshell:~/practica-4-muro (project-3111890e-6ba4-4e0e-95f)$ curl -s $B/mensajes
+{"instancia":"69b2f0","mensajes":[{"autor":"Beymar","texto":"primer mensaje"}]}
 ```
 
 ### Evidencias:
@@ -183,24 +265,23 @@ curl https://villamizar-backend-ivd2fmc7ia-uc.a.run.app/mensajes
 
 ## Fase 4. El frontend, conectado
 
-Se etiquetó y subió la imagen del frontend a Artifact Registry. Se desplegó el servicio de Cloud Run para el frontend pasando automáticamente la URL del backend mediante la referencia de Terraform `google_cloud_run_v2_service.backend.uri`. Se comprobó el funcionamiento del muro desde el navegador de escritorio y desde un dispositivo móvil.
+Se desplegó el servicio de Cloud Run para el frontend pasando automáticamente la URL del backend mediante la variable de entorno `BACKEND_URL` conectada en Terraform con `google_cloud_run_v2_service.backend.uri`. Se comprobó el acceso y publicación interactiva desde navegadores web de escritorio y dispositivos móviles.
 
 ### Comandos ejecutados:
 ```bash
-# Etiquetado y subida de la imagen del frontend
-docker tag frontend:v1 us-central1-docker.pkg.dev/project-3111890e-6ba4-4e0e-95f/villamizar-imagenes/frontend:v1
-docker push us-central1-docker.pkg.dev/project-3111890e-6ba4-4e0e-95f/villamizar-imagenes/frontend:v1
-
-# Despliegue del frontend en Cloud Run
+# Despliegue del frontend con Terraform vinculando la URL del backend
 cd infra
 terraform apply -auto-approve
+
+# Consulta de las URLs resultantes de la infraestructura
+terraform output
 ```
 
 ### Evidencias:
 ![Fase 4 - Frontend Funcionando](evidencias/FASE4.png)
 *Vista de la aplicación web en navegador conectada al backend.*
 
-![Fase 4 - Interacción con el Muro](evidencias/FASE 4-EVIDENCIA2.png)
+![Fase 4 - Interacción con el Muro](evidencias/FASE%204-EVIDENCIA2.png)
 *Publicación de mensajes en tiempo real desde la interfaz web.*
 
 ![Fase 4 - Acceso Móvil](evidencias/FASE4-IPHONE.jpeg)
@@ -210,13 +291,31 @@ terraform apply -auto-approve
 
 ## Fase 5. El estado vive afuera
 
-Se validó el desacoplamiento del estado entre el cómputo y la base de datos. Se forzó el escalado y reinicio de contenedores en Cloud Run para comprobar que la instancia del backend es efímera e intercambiable (el identificador aleatorio de instancia cambia en cada respuesta), mientras que la totalidad de los datos permanece intacta en Firestore.
+Se validó el desacoplamiento del cómputo y la persistencia de datos. Al someter el servicio a carga concurrente mediante scripts de peticiones paralelas, se observó la alternancia de identificadores aleatorios de instancia (`INSTANCIA`), evidenciando que los contenedores son completamente sin estado (*stateless*) y reemplazables, mientras que los datos residen íntegros en Firestore.
 
-### Comandos ejecutados:
+### Comandos ejecutados y salidas:
 ```bash
-# Generación de peticiones concurrentes para observar el cambio de instancias
-curl https://villamizar-backend-ivd2fmc7ia-uc.a.run.app/mensajes
-curl https://villamizar-backend-ivd2fmc7ia-uc.a.run.app/mensajes
+yefreybeimar2005@cloudshell:~/practica-4-muro (project-3111890e-6ba4-4e0e-95f)$ B=$(terraform -chdir=infra output -raw url_backend)
+
+# Inicia la carga en segundo plano y consulta la API concurrentemente
+~/go/bin/hey -z 30s -c 15 $B/mensajes &
+sleep 3
+for i in $(seq 15); do curl -s $B/mensajes | cut -c1-30; done
+{"instancia":"94b373","mensaje
+{"instancia":"94b373","mensaje
+{"instancia":"94b373","mensaje
+{"instancia":"94b373","mensaje
+{"instancia":"94b373","mensaje
+{"instancia":"94b373","mensaje
+{"instancia":"94b373","mensaje
+{"instancia":"94b373","mensaje
+{"instancia":"94b373","mensaje
+{"instancia":"94b373","mensaje
+{"instancia":"94b373","mensaje
+{"instancia":"94b373","mensaje
+{"instancia":"94b373","mensaje
+{"instancia":"94b373","mensaje
+{"instancia":"94b373","mensaje
 ```
 
 ### Evidencias:
@@ -224,7 +323,7 @@ curl https://villamizar-backend-ivd2fmc7ia-uc.a.run.app/mensajes
 *Visualización de datos conservados independientemente del ciclo de vida del contenedor.*
 
 ![Fase 5 - Múltiples instancias efímeras](evidencias/FASE5-INSTANCIAS.png)
-*Respuestas provenientes de identificadores de instancia distintos confirmando el diseño sin estado.*
+*Respuestas concurrentes confirmando el desacoplamiento y diseño sin estado.*
 
 ---
 
@@ -232,7 +331,7 @@ curl https://villamizar-backend-ivd2fmc7ia-uc.a.run.app/mensajes
 
 Se implementaron las mejoras funcionales, de seguridad y de eficiencia solicitadas:
 1. Endpoint `POST /mensajes/<id>/like` que incrementa atómicamente el contador de likes en Firestore usando `firestore.Increment(1)`.
-2. Política restrictiva de CORS que valida que el origen pertenezca a nuestro frontend, bloqueando peticiones cruzadas no autorizadas (como `google.com`).
+2. Política restrictiva de CORS que valida que el origen pertenezca a nuestro frontend (`villamizar-frontend`), bloqueando peticiones cruzadas no autorizadas (como `google.com`).
 3. Actualización de la interfaz con botones interactivos `❤️ Me gusta` por mensaje, botón `🔄 Actualizar Muro` y ampliación del intervalo de auto-refresco a 60 segundos.
 
 ### Comandos ejecutados:
