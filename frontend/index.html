@@ -58,7 +58,27 @@
     cursor: pointer;
   }
   button:disabled { opacity: .6; cursor: default; }
-  #estado { display: block; margin: 1rem .2rem .6rem; color: var(--suave); font-size: .85rem; }
+  .barra-acciones {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 1rem .2rem .6rem;
+    gap: .5rem;
+  }
+  .barra-acciones #estado { margin: 0; color: var(--suave); font-size: .85rem; }
+  .btn-actualizar {
+    width: auto;
+    font-size: .85rem;
+    padding: .45rem .85rem;
+    background: var(--tarjeta);
+    color: var(--texto);
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+    font-weight: 500;
+  }
+  .btn-actualizar:hover {
+    background: #ebe6e0;
+  }
   ul { list-style: none; padding: 0; margin: 0; }
   li {
     display: flex;
@@ -78,8 +98,30 @@
     font-weight: 700;
     color: #fff;
   }
+  .contenido { flex: 1; min-width: 0; }
   .autor { font-weight: 650; margin-bottom: .15rem; }
   .cuerpo { line-height: 1.4; overflow-wrap: anywhere; }
+  .acciones-mensaje { margin-top: .5rem; }
+  .btn-like {
+    width: auto;
+    font-size: .82rem;
+    padding: .3rem .6rem;
+    background: #faf8f6;
+    color: var(--texto);
+    border: 1px solid var(--borde);
+    border-radius: 6px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    transition: all .15s ease;
+  }
+  .btn-like:hover {
+    background: #feecef;
+    color: var(--acento);
+    border-color: #f7bec5;
+  }
+  .btn-like:disabled { opacity: .6; cursor: default; }
 </style>
 </head>
 <body>
@@ -95,7 +137,10 @@
     <textarea id="texto" placeholder="Escribe un mensaje" maxlength="280"></textarea>
     <button id="enviar">Publicar</button>
   </div>
-  <small id="estado">Cargando...</small>
+  <div class="barra-acciones">
+    <small id="estado">Cargando...</small>
+    <button id="actualizar" type="button" class="btn-actualizar">🔄 Actualizar Muro</button>
+  </div>
   <ul id="lista"></ul>
 </main>
 <script>
@@ -121,13 +166,40 @@ async function cargar() {
       inicial.textContent = (m.autor[0] || "?").toUpperCase();
       inicial.style.background = colorDe(m.autor);
       const contenido = document.createElement("div");
+      contenido.className = "contenido";
       const autor = document.createElement("div");
       autor.className = "autor";
       autor.textContent = m.autor;
       const cuerpo = document.createElement("div");
       cuerpo.className = "cuerpo";
       cuerpo.textContent = m.texto;
-      contenido.append(autor, cuerpo);
+
+      const acciones = document.createElement("div");
+      acciones.className = "acciones-mensaje";
+
+      const btnLike = document.createElement("button");
+      btnLike.className = "btn-like";
+      btnLike.innerHTML = `❤️ Me gusta <span class="contador-likes">${m.likes || 0}</span>`;
+      btnLike.onclick = async () => {
+        btnLike.disabled = true;
+        try {
+          const res = await fetch(`${API}/mensajes/${encodeURIComponent(m.id)}/like`, {
+            method: "POST"
+          });
+          if (res.ok) {
+            m.likes = (m.likes || 0) + 1;
+            const contador = btnLike.querySelector(".contador-likes");
+            if (contador) contador.textContent = m.likes;
+          }
+        } catch (error) {
+          console.error("Error al dar like:", error);
+        } finally {
+          btnLike.disabled = false;
+        }
+      };
+
+      acciones.append(btnLike);
+      contenido.append(autor, cuerpo, acciones);
       li.append(inicial, contenido);
       lista.append(li);
     }
@@ -136,6 +208,10 @@ async function cargar() {
     document.getElementById("estado").textContent = "No se pudo hablar con el backend: " + error;
   }
 }
+
+document.getElementById("actualizar").onclick = () => {
+  cargar();
+};
 
 document.getElementById("enviar").onclick = async () => {
   const boton = document.getElementById("enviar");
@@ -157,7 +233,7 @@ document.getElementById("enviar").onclick = async () => {
 };
 
 cargar();
-setInterval(cargar, 5000);
+setInterval(cargar, 60000);
 </script>
 </body>
 </html>

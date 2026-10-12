@@ -10,9 +10,9 @@ INSTANCIA = uuid.uuid4().hex[:6]
 
 @app.after_request
 def permitir_navegador(respuesta):
-    respuesta.headers["Access-Control-Allow-Origin"] = os.environ.get("ORIGEN_PERMITIDO", "*")
+    respuesta.headers["Access-Control-Allow-Origin"] = os.environ.get("FRONTEND_URL", "")
     respuesta.headers["Access-Control-Allow-Headers"] = "Content-Type"
-    respuesta.headers["Access-Control-Allow-Methods"] = "GET, POST"
+    respuesta.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     return respuesta
 
 
@@ -26,7 +26,15 @@ def listar():
     consulta = (db.collection("mensajes")
                   .order_by("creado", direction=firestore.Query.DESCENDING)
                   .limit(20))
-    mensajes = [{"autor": d.get("autor"), "texto": d.get("texto")} for d in consulta.stream()]
+    mensajes = []
+    for d in consulta.stream():
+        datos = d.to_dict() or {}
+        mensajes.append({
+            "id": d.id,
+            "autor": datos.get("autor", ""),
+            "texto": datos.get("texto", ""),
+            "likes": datos.get("likes", 0),
+        })
     return jsonify(instancia=INSTANCIA, mensajes=mensajes)
 
 
@@ -41,5 +49,17 @@ def crear():
         "autor": autor,
         "texto": texto,
         "creado": firestore.SERVER_TIMESTAMP,
+        "likes": 0,
     })
     return jsonify(ok=True, instancia=INSTANCIA), 201
+
+
+@app.post("/mensajes/<id>/like")
+def dar_like(id):
+    doc_ref = db.collection("mensajes").document(id)
+    doc = doc_ref.get()
+    if not doc.exists:
+        return jsonify(error="mensaje no encontrado"), 404
+    doc_ref.update({"likes": firestore.Increment(1)})
+    return jsonify(ok=True, instancia=INSTANCIA)
+
