@@ -8,10 +8,17 @@ db = firestore.Client(database=os.environ.get("BASE_DATOS", "(default)"))
 INSTANCIA = uuid.uuid4().hex[:6]
 
 
+@app.before_request
+def manejar_preflight():
+    if request.method == "OPTIONS":
+        return "", 204
+
+
 @app.after_request
 def permitir_navegador(respuesta):
-    respuesta.headers["Access-Control-Allow-Origin"] = os.environ.get("FRONTEND_URL", "")
-    respuesta.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    origen = os.environ.get("FRONTEND_URL") or request.headers.get("Origin") or "*"
+    respuesta.headers["Access-Control-Allow-Origin"] = origen
+    respuesta.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     respuesta.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     return respuesta
 
