@@ -9,10 +9,15 @@ INSTANCIA = uuid.uuid4().hex[:6]
 
 
 def aplicar_cors(respuesta):
-    origen = os.environ.get("FRONTEND_URL")
-    if not origen or origen.strip() == "":
-        origen = request.headers.get("Origin") or "*"
-    respuesta.headers["Access-Control-Allow-Origin"] = origen
+    origen_peticion = request.headers.get("Origin", "")
+    frontend_url = os.environ.get("FRONTEND_URL", "")
+
+    if (frontend_url and origen_peticion == frontend_url) or "villamizar-frontend" in origen_peticion or "localhost" in origen_peticion:
+        permitido = origen_peticion
+    else:
+        permitido = frontend_url or "https://villamizar-frontend"
+
+    respuesta.headers["Access-Control-Allow-Origin"] = permitido
     respuesta.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     respuesta.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     return respuesta
