@@ -352,6 +352,12 @@ terraform apply -auto-approve
 ![Fase 6 - Funcionalidad de Me Gusta y Actualización](evidencias/FASE6-MEGUSTA.jpeg)
 *Muro con botones de Me Gusta funcionales, contador reactivo y botón manual de actualización.*
 
+![Fase 6 - Política de CORS](evidencias/FASE6-CORS.png)
+*Validación de la política restrictiva de CORS bloqueando accesos no autorizados.*
+
+![Fase 6 - Optimización y Rendimiento](evidencias/FASE6-OPTIMIZACION.png)
+*Ajuste del intervalo de auto-refresco a 60 segundos y eficiencia en peticiones.*
+
 ---
 
 ### Decisiones
